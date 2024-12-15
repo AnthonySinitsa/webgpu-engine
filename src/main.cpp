@@ -239,12 +239,9 @@ int main(int, char**)
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
         // MARK: galaxy
-        printf("Frame start\n");
         float deltaTime = io.DeltaTime;
         galaxy_system->updateCamera(deltaTime);
-        printf("Camera updated\n");
         galaxy_system->render(pass);
-        printf("Galaxy rendered\n");
 
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
         wgpuRenderPassEncoderEnd(pass);

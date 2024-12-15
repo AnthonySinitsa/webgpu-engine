@@ -4,19 +4,10 @@
 #include <iostream>
 
 GalaxyWebSystem::GalaxyWebSystem(WGPUDevice device) : device(device) {
-    printf("Creating GalaxyWebSystem\n");
-    
     createPipeline();
-    printf("Pipeline created\n");
-    
     initStars();
-    printf("Stars initialized\n");
-    
     createBuffers();
-    printf("Buffers created\n");
-    
     updateUniforms();
-    printf("Uniforms updated\n");
 }
 
 GalaxyWebSystem::~GalaxyWebSystem() {
@@ -34,33 +25,56 @@ void GalaxyWebSystem::cleanup() {
 // MARK: initStars
 void GalaxyWebSystem::initStars() {
     stars.resize(NUM_STARS);
+    printf("\nInitializing %d stars:\n", NUM_STARS);
     for (int i = 0; i < NUM_STARS; i++) {
-        stars[i].position[0] = ((float)i - NUM_STARS/2.0f);  // x position along a line
-        stars[i].position[1] = 0.0f;                       // y position at center
-        stars[i].position[2] = 0.0f;                       // z position at center
+        stars[i].position[0] = ((float)i - NUM_STARS/2.0f) * 0.5f;
+        stars[i].position[1] = 0.0f;
+        stars[i].position[2] = 0.0f;
+
+        printf("Star %d: pos(%.2f, %.2f, %.2f)\n", 
+            i, 
+            stars[i].position[0], 
+            stars[i].position[1], 
+            stars[i].position[2]);
     }
 }
 
 void GalaxyWebSystem::updateCamera(float deltaTime) {
     // Simple camera rotation
-    cameraRotation += deltaTime * 0.5f;
-    float radius = 10.0f;
-    cameraPos.x = sin(cameraRotation) * radius;
-    cameraPos.z = cos(cameraRotation) * radius;
+    // cameraRotation += deltaTime * 0.5f;
+    // float radius = 10.0f;
+    // cameraPos.x = sin(cameraRotation) * radius;
+    // cameraPos.z = cos(cameraRotation) * radius;
     
     updateUniforms();
 }
 
 void GalaxyWebSystem::updateUniforms() {
+    static int updateCount = 0;
+
     // Update view matrix
-    glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     
     // Update projection matrix
     float aspect = 1280.0f / 720.0f; // TODO: Get actual window dimensions
-    glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+    glm::mat4 proj = glm::perspective(glm::radians(90.0f), aspect, 0.1f, 100.0f);
     
     // WebGPU uses Y-flipped NDC compared to OpenGL/Vulkan
     proj[1][1] *= -1;
+
+    if (updateCount++ % 60 == 0) {
+        printf("\nCamera matrices (update %d):\n", updateCount);
+        printf("View matrix:\n");
+        for (int i = 0; i < 4; i++) {
+            printf("[ %.2f %.2f %.2f %.2f ]\n", 
+                view[i][0], view[i][1], view[i][2], view[i][3]);
+        }
+        printf("Projection matrix:\n");
+        for (int i = 0; i < 4; i++) {
+            printf("[ %.2f %.2f %.2f %.2f ]\n", 
+                proj[i][0], proj[i][1], proj[i][2], proj[i][3]);
+        }
+    }
 
     cameraUniforms.view = view;
     cameraUniforms.proj = proj;
@@ -85,6 +99,18 @@ void GalaxyWebSystem::createBuffers() {
 
     void* data = wgpuBufferGetMappedRange(vertexBuffer, 0, bufferDesc.size);
     memcpy(data, stars.data(), bufferDesc.size);
+
+    printf("\nBuffer created with size: %llu bytes\n", bufferDesc.size);
+    printf("Star data copied to buffer. First few positions:\n");
+    Star* starData = (Star*)data;
+    for (size_t i = 0; i < std::min(size_t(3), stars.size()); i++) {
+        printf("Buffer Star %zu: pos(%.2f, %.2f, %.2f)\n", 
+            i, 
+            starData[i].position[0], 
+            starData[i].position[1], 
+            starData[i].position[2]);
+    }
+
     wgpuBufferUnmap(vertexBuffer);
 
     // Uniform buffer
@@ -156,24 +182,25 @@ void GalaxyWebSystem::createPipeline() {
         @vertex
         fn vs_main(in: VertexInput) -> VertexOutput {
             var out: VertexOutput;
-            out.position = camera.proj * camera.view * vec4f(in.position, 1.0);
+            let worldPos = vec4f(in.position, 1.0);
+            out.position = camera.proj * camera.view * worldPos;
             out.worldPos = in.position;
             return out;
         }
 
         @fragment
         fn fs_main(@location(0) worldPos: vec3f) -> @location(0) vec4f {
-            // Calculate distance from fragment to center of point
-            let dist = length(fract(worldPos.xy) - 0.5);
+            // Simple circular point
+            let coord = vec2f(0.5);
+            let dist = length(coord);
             
-            // Create a circular point
+            // Simple point rendering
             if (dist > 0.5) {
                 discard;
             }
             
-            // Add some basic lighting
-            let brightness = 1.0 - dist * 2.0;
-            return vec4f(1.0, 0.5, 0.0, brightness);  // Orange points with falloff
+            // Bright orange color
+            return vec4f(1.0, 0.5, 0.0, 1.0);
         }
     )";
 
@@ -242,7 +269,7 @@ void GalaxyWebSystem::createPipeline() {
 
     // Primitive state
     WGPUPrimitiveState primitive = {};
-    primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    primitive.topology = WGPUPrimitiveTopology_PointList;
     primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
     primitive.frontFace = WGPUFrontFace_CCW;
     primitive.cullMode = WGPUCullMode_None;
@@ -260,20 +287,36 @@ void GalaxyWebSystem::createPipeline() {
 }
 
 void GalaxyWebSystem::render(WGPURenderPassEncoder renderPass) {
-    printf("Starting galaxy render\n");
-    if (!pipeline) {
-        printf("Pipeline is null!\n");
-        return;
+    static int frameCount = 0;
+    if (frameCount++ % 60 == 0) {  // Print every 60 frames to avoid spam
+        printf("\nRender frame %d:\n", frameCount);
+        printf("Star positions:\n");
+        for (int i = 0; i < NUM_STARS; i++) {
+            printf("Star %d: pos(%.2f, %.2f, %.2f)\n", 
+                i, 
+                stars[i].position[0], 
+                stars[i].position[1], 
+                stars[i].position[2]);
+        }
+        printf("Drawing %d stars\n", NUM_STARS);
+        printf("Vertex buffer handle: %p\n", (void*)vertexBuffer);
+        printf("Bind group handle: %p\n", (void*)bindGroup);
     }
-    if (!bindGroup) {
-        printf("Bind group is null!\n");
+
+    if (!pipeline || !vertexBuffer || !bindGroup) {
+        printf("Error: Missing required resources for rendering!\n");
+        printf("Pipeline: %p, VertexBuffer: %p, BindGroup: %p\n",
+            (void*)pipeline, (void*)vertexBuffer, (void*)bindGroup);
         return;
     }
 
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
     wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, sizeof(Star) * stars.size());
+
+    if (frameCount % 60 == 0) {
+        printf("Draw call: %d vertices\n", NUM_STARS);
+    }
+
     wgpuRenderPassEncoderDraw(renderPass, NUM_STARS, 1, 0, 0);
-    
-    printf("Galaxy render complete\n");
 }
