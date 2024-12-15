@@ -11,6 +11,7 @@
 #include "imgui.h"
 #include "../external/imgui/backends/imgui_impl_glfw.h"
 #include "../external/imgui/backends/imgui_impl_wgpu.h"
+#include "GalaxyWebSystem.h"
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
@@ -38,6 +39,8 @@ static WGPUTextureFormat wgpu_preferred_fmt = WGPUTextureFormat_RGBA8Unorm;
 static WGPUSwapChain     wgpu_swap_chain = nullptr;
 static int               wgpu_swap_chain_width = 1280;
 static int               wgpu_swap_chain_height = 720;
+
+static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
 
 // Forward declarations
 static bool InitWGPU(GLFWwindow* window);
@@ -234,6 +237,10 @@ int main(int, char**)
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu_device, &enc_desc);
 
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
+
+        // Render galaxy first
+        galaxy_system->render(pass);
+
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
         wgpuRenderPassEncoderEnd(pass);
 
@@ -310,6 +317,8 @@ static bool InitWGPU(GLFWwindow* window)
         return false;
     wgpu_device = RequestDevice(adapter);
 #endif
+
+    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
 
 #ifdef __EMSCRIPTEN__
     wgpu::SurfaceDescriptorFromCanvasHTMLSelector html_surface_desc = {};

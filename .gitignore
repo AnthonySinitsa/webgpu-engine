@@ -3,6 +3,7 @@
 *.spv
 .clangd
 compile_commands.json
+*.Identifier
 .zed
 .vscode/
 .idea/

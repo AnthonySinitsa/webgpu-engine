@@ -4488,7 +4488,63 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
       WebGPU.mgrBuffer.get(bufferId).destroy();
     };
 
+  
+  var zeroMemory = (address, size) => {
+      HEAPU8.fill(0, address, address + size);
+    };
+  
+  
+  
+  var _wgpuBufferGetMappedRange = (bufferId, offset, size) => {
+      var bufferWrapper = WebGPU.mgrBuffer.objects[bufferId];
+      assert(typeof bufferWrapper != "undefined");
+  
+      if (size === 0) warnOnce('getMappedRange size=0 no longer means WGPU_WHOLE_MAP_SIZE');
+  
+      if (size == -1) size = undefined;
+  
+      if (bufferWrapper.mapMode !== 2) {
+        abort("GetMappedRange called, but buffer not mapped for writing");
+        // TODO(kainino0x): Somehow inject a validation error?
+        return 0;
+      }
+  
+      var mapped;
+      try {
+        mapped = bufferWrapper.object.getMappedRange(offset, size);
+      } catch (ex) {
+        err(`wgpuBufferGetMappedRange(${offset}, ${size}) failed: ${ex}`);
+        // TODO(kainino0x): Somehow inject a validation error?
+        return 0;
+      }
+  
+      var data = _memalign(16, mapped.byteLength);
+      zeroMemory(data, mapped.byteLength);
+      bufferWrapper.onUnmap.push(() => {
+        new Uint8Array(mapped).set(HEAPU8.subarray(data, data + mapped.byteLength));
+        _free(data);
+      });
+      return data;
+    };
+
   var _wgpuBufferRelease = (id) => WebGPU.mgrBuffer.release(id);
+
+  var _wgpuBufferUnmap = (bufferId) => {
+      var bufferWrapper = WebGPU.mgrBuffer.objects[bufferId];
+      assert(typeof bufferWrapper != "undefined");
+  
+      if (!bufferWrapper.onUnmap) {
+        // Already unmapped
+        return;
+      }
+  
+      for (var i = 0; i < bufferWrapper.onUnmap.length; ++i) {
+        bufferWrapper.onUnmap[i]();
+      }
+      bufferWrapper.onUnmap = undefined;
+  
+      bufferWrapper.object.unmap();
+    };
 
   var _wgpuCommandBufferRelease = (id) => WebGPU.mgrCommandBuffer.release(id);
 
@@ -5279,6 +5335,11 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
       queue.writeTexture(destination, subarray, dataLayout, writeSize);
     };
 
+  var _wgpuRenderPassEncoderDraw = (passId, vertexCount, instanceCount, firstVertex, firstInstance) => {
+      var pass = WebGPU.mgrRenderPassEncoder.get(passId);
+      pass.draw(vertexCount, instanceCount, firstVertex, firstInstance);
+    };
+
   var _wgpuRenderPassEncoderDrawIndexed = (passId, indexCount, instanceCount, firstIndex, baseVertex, firstInstance) => {
       var pass = WebGPU.mgrRenderPassEncoder.get(passId);
       pass.drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
@@ -5575,7 +5636,11 @@ var wasmImports = {
   /** @export */
   wgpuBufferDestroy: _wgpuBufferDestroy,
   /** @export */
+  wgpuBufferGetMappedRange: _wgpuBufferGetMappedRange,
+  /** @export */
   wgpuBufferRelease: _wgpuBufferRelease,
+  /** @export */
+  wgpuBufferUnmap: _wgpuBufferUnmap,
   /** @export */
   wgpuCommandBufferRelease: _wgpuCommandBufferRelease,
   /** @export */
@@ -5620,6 +5685,8 @@ var wasmImports = {
   wgpuQueueWriteBuffer: _wgpuQueueWriteBuffer,
   /** @export */
   wgpuQueueWriteTexture: _wgpuQueueWriteTexture,
+  /** @export */
+  wgpuRenderPassEncoderDraw: _wgpuRenderPassEncoderDraw,
   /** @export */
   wgpuRenderPassEncoderDrawIndexed: _wgpuRenderPassEncoderDrawIndexed,
   /** @export */
@@ -5694,7 +5761,6 @@ var missingLibrarySymbols = [
   'convertU32PairToI53',
   'getTempRet0',
   'setTempRet0',
-  'zeroMemory',
   'strError',
   'inetPton4',
   'inetNtop4',
@@ -5854,6 +5920,7 @@ var unexportedSymbols = [
   'stackRestore',
   'stackAlloc',
   'ptrToString',
+  'zeroMemory',
   'exitJS',
   'getHeapMax',
   'growMemory',
