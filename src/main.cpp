@@ -99,8 +99,8 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 
     // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
+    // ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOther(window, true);
@@ -135,7 +135,7 @@ int main(int, char**)
 #endif
 
     // Our state
-    bool show_demo_window = true;
+    bool show_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -238,6 +238,8 @@ int main(int, char**)
 
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
+        float deltaTime = io.DeltaTime;
+        galaxy_system->updateCamera(deltaTime);
         // Render galaxy first
         galaxy_system->render(pass);
 
@@ -303,6 +305,7 @@ static WGPUDevice RequestDevice(WGPUAdapter& adapter)
 }
 #endif
 
+// MARK: InitWGPU
 static bool InitWGPU(GLFWwindow* window)
 {
     wgpu::Instance instance = wgpuCreateInstance(nullptr);
@@ -317,8 +320,6 @@ static bool InitWGPU(GLFWwindow* window)
         return false;
     wgpu_device = RequestDevice(adapter);
 #endif
-
-    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
 
 #ifdef __EMSCRIPTEN__
     wgpu::SurfaceDescriptorFromCanvasHTMLSelector html_surface_desc = {};
@@ -340,6 +341,8 @@ static bool InitWGPU(GLFWwindow* window)
     wgpu_surface = surface.MoveToCHandle();
 
     wgpuDeviceSetUncapturedErrorCallback(wgpu_device, wgpu_error_callback, nullptr);
+
+    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
 
     return true;
 }
