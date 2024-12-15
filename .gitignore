@@ -1,6 +1,7 @@
 # Project-specific ignores
 [Bb]uild/
 *.spv
+.clangd
 compile_commands.json
 .zed
 .vscode/
