@@ -19,10 +19,25 @@ WEB_DIR = web
 EXE = $(WEB_DIR)/index.js
 IMGUI_DIR = ./external/imgui
 SRC_DIR = ./src
-SOURCES = $(SRC_DIR)/main.cpp
-SOURCES += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
-SOURCES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_wgpu.cpp
-OBJS = $(addprefix build/, $(addsuffix .o, $(basename $(notdir $(SOURCES)))))
+
+# Define source files with their full paths
+IMGUI_SOURCES = $(IMGUI_DIR)/imgui.cpp \
+                $(IMGUI_DIR)/imgui_demo.cpp \
+                $(IMGUI_DIR)/imgui_draw.cpp \
+                $(IMGUI_DIR)/imgui_tables.cpp \
+                $(IMGUI_DIR)/imgui_widgets.cpp \
+                $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp \
+                $(IMGUI_DIR)/backends/imgui_impl_wgpu.cpp
+
+SRC_SOURCES = $(SRC_DIR)/main.cpp \
+              $(SRC_DIR)/GalaxyWebSystem.cpp
+
+ALL_SOURCES = $(SRC_SOURCES) $(IMGUI_SOURCES)
+
+# Generate object file paths, maintaining directory structure
+OBJS = $(patsubst $(SRC_DIR)/%.cpp,build/src/%.o,$(SRC_SOURCES)) \
+       $(patsubst $(IMGUI_DIR)/%.cpp,build/imgui/%.o,$(IMGUI_SOURCES))
+
 UNAME_S := $(shell uname -s)
 CPPFLAGS =
 LDFLAGS =
@@ -41,30 +56,34 @@ CPPFLAGS += -DIMGUI_DISABLE_FILE_FUNCTIONS
 endif
 
 # Build flags
-CPPFLAGS += -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
+CPPFLAGS += -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I./external/glm -I$(SRC_DIR)
 CPPFLAGS += -Wall -Wformat -Os $(EMS)
 LDFLAGS += $(EMS)
+
+# Create build directory structure
+BUILD_DIRS = build/src build/imgui/backends build/imgui
 
 # Add commands for compile_commands.json generation
 COMPILE_COMMANDS = compile_commands.json
 COMPILE_COMMAND_TEMPLATE = { "directory": "$(CURDIR)", "command": "$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(abspath $<) -o $(abspath $@)", "file": "$(abspath $<)" }
 
-build/%.o: $(SRC_DIR)/%.cpp | build
+# Build rules
+build/src/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIRS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 	@echo $(COMPILE_COMMAND_TEMPLATE) >> $(COMPILE_COMMANDS).tmp
 
-build/%.o: $(IMGUI_DIR)/%.cpp | build
+build/imgui/%.o: $(IMGUI_DIR)/%.cpp | $(BUILD_DIRS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 	@echo $(COMPILE_COMMAND_TEMPLATE) >> $(COMPILE_COMMANDS).tmp
 
-build/%.o: $(IMGUI_DIR)/backends/%.cpp | build
+build/imgui/backends/%.o: $(IMGUI_DIR)/backends/%.cpp | $(BUILD_DIRS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 	@echo $(COMPILE_COMMAND_TEMPLATE) >> $(COMPILE_COMMANDS).tmp
 
 all: clean-compile-commands $(EXE)
 	@echo Build complete for $(EXE)
 
-build:
+$(BUILD_DIRS):
 	mkdir -p $@
 
 $(WEB_DIR):
@@ -85,3 +104,10 @@ clean-compile-commands:
 
 clean: clean-compile-commands
 	rm -rf build $(WEB_DIR)/*.js $(WEB_DIR)/*.wasm $(WEB_DIR)/*.wasm.pre
+
+# Print debug information
+debug:
+	@echo "Source files:"
+	@echo "$(ALL_SOURCES)" | tr ' ' '\n'
+	@echo "\nObject files:"
+	@echo "$(OBJS)" | tr ' ' '\n'
