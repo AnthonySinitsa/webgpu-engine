@@ -57,7 +57,7 @@ endif
 
 # Build flags
 CPPFLAGS += -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I./external/glm -I$(SRC_DIR)
-CPPFLAGS += -Wall -Wformat -Os $(EMS)
+CPPFLAGS += -Wall -Wformat -Os $(EMS) -Wno-nontrivial-memaccess -Wno-write-strings
 LDFLAGS += $(EMS)
 
 # Create build directory structure

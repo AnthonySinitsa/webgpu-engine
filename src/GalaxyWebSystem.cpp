@@ -4,10 +4,19 @@
 #include <iostream>
 
 GalaxyWebSystem::GalaxyWebSystem(WGPUDevice device) : device(device) {
+    printf("Creating GalaxyWebSystem\n");
+    
     createPipeline();
+    printf("Pipeline created\n");
+    
     initStars();
+    printf("Stars initialized\n");
+    
     createBuffers();
-    updateUniforms(); // Initial camera setup
+    printf("Buffers created\n");
+    
+    updateUniforms();
+    printf("Uniforms updated\n");
 }
 
 GalaxyWebSystem::~GalaxyWebSystem() {
@@ -141,24 +150,41 @@ void GalaxyWebSystem::createPipeline() {
 
         struct VertexOutput {
             @builtin(position) position: vec4f,
+            @location(0) worldPos: vec3f,
         };
 
         @vertex
         fn vs_main(in: VertexInput) -> VertexOutput {
             var out: VertexOutput;
             out.position = camera.proj * camera.view * vec4f(in.position, 1.0);
+            out.worldPos = in.position;
             return out;
         }
 
         @fragment
-        fn fs_main() -> @location(0) vec4f {
-            return vec4f(1.0, 0.8, 0.8, 1.0);  // White stars
+        fn fs_main(@location(0) worldPos: vec3f) -> @location(0) vec4f {
+            // Calculate distance from fragment to center of point
+            let dist = length(fract(worldPos.xy) - 0.5);
+            
+            // Create a circular point
+            if (dist > 0.5) {
+                discard;
+            }
+            
+            // Add some basic lighting
+            let brightness = 1.0 - dist * 2.0;
+            return vec4f(1.0, 0.5, 0.0, brightness);  // Orange points with falloff
         }
     )";
 
     WGPUShaderModuleDescriptor shaderDesc = {};
     shaderDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&wgslDesc);
     WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
+    if (!shaderModule) {
+        printf("Failed to create shader module!\n");
+        return;
+    }
+    printf("Shader module created successfully!\n");
 
     // Vertex state
     WGPUVertexAttribute vertexAttrib = {};
@@ -188,6 +214,13 @@ void GalaxyWebSystem::createPipeline() {
     pipelineDesc.vertex.bufferCount = 1;
     pipelineDesc.vertex.buffers = &vertexBufferLayout;
 
+    // Add multisample state
+    WGPUMultisampleState multisample = {};
+    multisample.count = 1;  // Set to 1 for no multisampling
+    multisample.mask = 0xFFFFFFFF;
+    multisample.alphaToCoverageEnabled = false;
+    pipelineDesc.multisample = multisample;
+
     // Fragment state
     WGPUFragmentState fragmentState = {};
     WGPUBlendState blend = {};
@@ -207,21 +240,40 @@ void GalaxyWebSystem::createPipeline() {
     fragmentState.targets = &colorTarget;
     pipelineDesc.fragment = &fragmentState;
 
-    // Other states
-    pipelineDesc.primitive.topology = WGPUPrimitiveTopology_PointList;
-    pipelineDesc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
-    pipelineDesc.primitive.frontFace = WGPUFrontFace_CCW;
-    pipelineDesc.primitive.cullMode = WGPUCullMode_None;
+    // Primitive state
+    WGPUPrimitiveState primitive = {};
+    primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+    primitive.frontFace = WGPUFrontFace_CCW;
+    primitive.cullMode = WGPUCullMode_None;
+    pipelineDesc.primitive = primitive;
 
     pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
+    if (!pipeline) {
+        printf("Failed to create render pipeline!\n");
+    } else {
+        printf("Pipeline created successfully!\n");
+    }
 
     wgpuShaderModuleRelease(shaderModule);
     wgpuPipelineLayoutRelease(pipelineLayout);
 }
 
 void GalaxyWebSystem::render(WGPURenderPassEncoder renderPass) {
+    printf("Starting galaxy render\n");
+    if (!pipeline) {
+        printf("Pipeline is null!\n");
+        return;
+    }
+    if (!bindGroup) {
+        printf("Bind group is null!\n");
+        return;
+    }
+
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
     wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, sizeof(Star) * stars.size());
     wgpuRenderPassEncoderDraw(renderPass, NUM_STARS, 1, 0, 0);
+    
+    printf("Galaxy render complete\n");
 }

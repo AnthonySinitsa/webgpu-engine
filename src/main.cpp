@@ -99,8 +99,8 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 
     // Setup Dear ImGui style
-    // ImGui::StyleColorsDark();
-    ImGui::StyleColorsLight();
+    ImGui::StyleColorsDark();
+    // ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOther(window, true);
@@ -238,10 +238,13 @@ int main(int, char**)
 
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
+        // MARK: galaxy
+        printf("Frame start\n");
         float deltaTime = io.DeltaTime;
         galaxy_system->updateCamera(deltaTime);
-        // Render galaxy first
+        printf("Camera updated\n");
         galaxy_system->render(pass);
+        printf("Galaxy rendered\n");
 
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
         wgpuRenderPassEncoderEnd(pass);
@@ -343,6 +346,10 @@ static bool InitWGPU(GLFWwindow* window)
     wgpuDeviceSetUncapturedErrorCallback(wgpu_device, wgpu_error_callback, nullptr);
 
     galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
+    if (!galaxy_system) {
+        printf("Failed to create galaxy system!\n");
+        return false;
+    }
 
     return true;
 }
