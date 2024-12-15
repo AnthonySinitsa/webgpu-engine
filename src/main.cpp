@@ -9,8 +9,8 @@
 // - Introduction, links and more at the top of imgui.cpp
 
 #include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_wgpu.h"
+#include "../external/imgui/backends/imgui_impl_glfw.h"
+#include "../external/imgui/backends/imgui_impl_wgpu.h"
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
@@ -215,7 +215,7 @@ int main(int, char**)
 
 #ifndef __EMSCRIPTEN__
         // Tick needs to be called in Dawn to display validation errors
-        wgpuDeviceTick(wgpu_device);
+        // wgpuDeviceTick(wgpu_device);
 #endif
 
         WGPURenderPassColorAttachment color_attachments = {};
