@@ -30,7 +30,8 @@ IMGUI_SOURCES = $(IMGUI_DIR)/imgui.cpp \
                 $(IMGUI_DIR)/backends/imgui_impl_wgpu.cpp
 
 SRC_SOURCES = $(SRC_DIR)/main.cpp \
-              $(SRC_DIR)/GalaxyWebSystem.cpp
+              $(SRC_DIR)/GalaxyWebSystem.cpp \
+							$(SRC_DIR)/TriangleRenderer.cpp
 
 ALL_SOURCES = $(SRC_SOURCES) $(IMGUI_SOURCES)
 

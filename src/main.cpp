@@ -11,7 +11,8 @@
 #include "imgui.h"
 #include "../external/imgui/backends/imgui_impl_glfw.h"
 #include "../external/imgui/backends/imgui_impl_wgpu.h"
-#include "GalaxyWebSystem.h"
+// #include "GalaxyWebSystem.h"
+#include "TriangleRenderer.h"
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
@@ -40,7 +41,8 @@ static WGPUSwapChain     wgpu_swap_chain = nullptr;
 static int               wgpu_swap_chain_width = 1280;
 static int               wgpu_swap_chain_height = 720;
 
-static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
+// static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
+static std::unique_ptr<TriangleRenderer> triangle_renderer = nullptr;
 
 // Forward declarations
 static bool InitWGPU(GLFWwindow* window);
@@ -239,9 +241,10 @@ int main(int, char**)
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
         // MARK: galaxy
-        float deltaTime = io.DeltaTime;
-        galaxy_system->updateCamera(deltaTime);
-        galaxy_system->render(pass);
+        // float deltaTime = io.DeltaTime;
+        // galaxy_system->updateCamera(deltaTime);
+        // galaxy_system->render(pass);
+        triangle_renderer->render(pass);
 
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
         wgpuRenderPassEncoderEnd(pass);
@@ -263,6 +266,8 @@ int main(int, char**)
 #ifdef __EMSCRIPTEN__
     EMSCRIPTEN_MAINLOOP_END;
 #endif
+
+    triangle_renderer.reset();
 
     // Cleanup
     ImGui_ImplWGPU_Shutdown();
@@ -342,9 +347,14 @@ static bool InitWGPU(GLFWwindow* window)
 
     wgpuDeviceSetUncapturedErrorCallback(wgpu_device, wgpu_error_callback, nullptr);
 
-    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
-    if (!galaxy_system) {
-        printf("Failed to create galaxy system!\n");
+    // galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
+    // if (!galaxy_system) {
+    //     printf("Failed to create galaxy system!\n");
+    //     return false;
+    // }
+    triangle_renderer = std::make_unique<TriangleRenderer>(wgpu_device);
+    if (!triangle_renderer) {
+        printf("Failed to create triangle renderer!\n");
         return false;
     }
 
