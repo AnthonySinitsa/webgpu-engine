@@ -11,6 +11,7 @@
 #include "imgui.h"
 #include "../external/imgui/backends/imgui_impl_glfw.h"
 #include "../external/imgui/backends/imgui_impl_wgpu.h"
+#include "../external/imgui/imgui_internal.h"
 // #include "GalaxyWebSystem.h"
 #include "TriangleRenderer.h"
 #include "Camera.h"
@@ -54,6 +55,9 @@ static struct CameraState {
     float nearClip = 0.1f;
     float farClip = 100.0f;
 } cameraState;
+
+static bool opt_fullscreen = true;
+static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
 
 // Forward declarations
 static bool InitWGPU(GLFWwindow* window);
@@ -99,6 +103,56 @@ static void renderCameraControls() {
             camera.setViewYXZ(cameraState.position, cameraState.rotation);
         }
     }
+}
+
+
+void createDockspace() {
+    // Configure flags
+    dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+
+    if (opt_fullscreen) {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | 
+                       ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
+                       ImGuiWindowFlags_NoBringToFrontOnFocus | 
+                       ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+    }
+
+    // Important: note that we proceed even if Begin() returns false (aka window is collapsed).
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("DockSpace Demo", nullptr, window_flags);
+    ImGui::PopStyleVar();
+
+    if (opt_fullscreen)
+        ImGui::PopStyleVar(2);
+
+    // Submit the DockSpace
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+
+        // Set up default layout if not already done
+        static bool first_time = true;
+        if (first_time) {
+            first_time = false;
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+
+            auto dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
+            ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+    }
+
+    ImGui::End();
 }
 
 
@@ -244,11 +298,12 @@ int main(int, char**)
             );
         }
 
-        // Start the Dear ImGui frame
+        // MARK: ImGui
         ImGui_ImplWGPU_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        createDockspace();
 
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
