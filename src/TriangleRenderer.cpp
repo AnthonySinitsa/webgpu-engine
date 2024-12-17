@@ -6,7 +6,6 @@ TriangleRenderer::TriangleRenderer(WGPUDevice device) : device(device) {
     createBindGroup();
     createPipeline();
     createVertexBuffer();
-    updateUniformBuffer();
 }
 
 TriangleRenderer::~TriangleRenderer() {
@@ -23,7 +22,6 @@ void TriangleRenderer::cleanup() {
 
 void TriangleRenderer::update(float deltaTime) {
     rotationAngle += deltaTime; // Rotate 1 radian per second
-    updateUniformBuffer();
 }
 
 void TriangleRenderer::createUniformBuffer() {
@@ -33,20 +31,15 @@ void TriangleRenderer::createUniformBuffer() {
     uniformBuffer = wgpuDeviceCreateBuffer(device, &uniformDesc);
 }
 
-void TriangleRenderer::updateUniformBuffer() {
+void TriangleRenderer::updateUniformBuffer(const Camera& camera) {
     // Create transformation matrices
     glm::mat4 model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, -3.0f), // Camera position
-        glm::vec3(0.0f, 0.0f, 0.0f),  // Look at point
-        glm::vec3(0.0f, 1.0f, 0.0f)   // Up vector
-    );
     glm::mat4 proj = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
     
     // WebGPU's coordinate system has a different handedness than OpenGL
     proj[1][1] *= -1;
 
-    uniformData.modelViewProj = proj * view * model;
+    uniformData.modelViewProj = camera.getProjection() * camera.getView() * model;
 
     // Update buffer
     wgpuQueueWriteBuffer(
@@ -202,7 +195,8 @@ void TriangleRenderer::createVertexBuffer() {
     wgpuBufferUnmap(vertexBuffer);
 }
 
-void TriangleRenderer::render(WGPURenderPassEncoder renderPass) {
+void TriangleRenderer::render(WGPURenderPassEncoder renderPass, const Camera& camera) {
+    updateUniformBuffer(camera);
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
     wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, sizeof(vertices));

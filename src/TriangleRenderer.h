@@ -3,12 +3,14 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Camera.h"
+
 class TriangleRenderer {
 public:
     TriangleRenderer(WGPUDevice device);
     ~TriangleRenderer();
 
-    void render(WGPURenderPassEncoder renderPass);
+    void render(WGPURenderPassEncoder renderPass, const Camera& camera);
     void update(float deltaTime);  // New update function for rotation
     void cleanup();
 
@@ -17,7 +19,7 @@ private:
     void createVertexBuffer();
     void createUniformBuffer();
     void createBindGroup();
-    void updateUniformBuffer();
+    void updateUniformBuffer(const Camera& camera);
 
     WGPUDevice device;
     WGPURenderPipeline pipeline = nullptr;
