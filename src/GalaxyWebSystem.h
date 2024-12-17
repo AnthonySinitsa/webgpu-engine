@@ -18,31 +18,28 @@ struct CameraUniforms {
 class GalaxyWebSystem {
 public:
     GalaxyWebSystem(WGPUDevice device);
-    ~GalaxyWebSystem();
+    ~GalaxyWebSystem();  // Add destructor declaration
 
     void render(WGPURenderPassEncoder renderPass);
-    void cleanup();
-    void updateCamera(float deltaTime);
+    void updateCamera(float deltaTime);  // Add updateCamera declaration
 
 private:
     static constexpr int NUM_STARS = 10;
     
+    void createPipelineAndResources();
     void createBuffers();
-    void createPipeline();
+    void createBindGroup(); 
     void initStars();
     void updateUniforms();
 
     WGPUDevice device;
-    WGPUBuffer vertexBuffer;
-    WGPUBuffer uniformBuffer;
-    WGPURenderPipeline pipeline;
-    WGPUBindGroup bindGroup;
-    WGPUBindGroupLayout bindGroupLayout;
+    WGPUBuffer vertexBuffer = nullptr;
+    WGPUBuffer uniformBuffer = nullptr;
+    WGPURenderPipeline pipeline = nullptr;
+    WGPUBindGroup bindGroup = nullptr;
+    WGPUBindGroupLayout bindGroupLayout = nullptr;
 
     std::vector<Star> stars;
     CameraUniforms cameraUniforms;
-    
-    // Camera state
-    glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, -2.0f);
-    // float cameraRotation = 0.0f;
+    float cameraRotation = 0.0f;
 };

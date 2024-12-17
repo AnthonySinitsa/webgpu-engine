@@ -12,9 +12,10 @@
 #include "../external/imgui/backends/imgui_impl_glfw.h"
 #include "../external/imgui/backends/imgui_impl_wgpu.h"
 #include "../external/imgui/imgui_internal.h"
-// #include "GalaxyWebSystem.h"
+#include "GalaxyWebSystem.h"
 #include "TriangleRenderer.h"
 #include "Camera.h"
+#include "GridRenderer.h"
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
@@ -43,17 +44,18 @@ static WGPUSwapChain     wgpu_swap_chain = nullptr;
 static int               wgpu_swap_chain_width = 1280;
 static int               wgpu_swap_chain_height = 720;
 
-// static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
+static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
 static std::unique_ptr<TriangleRenderer> triangle_renderer = nullptr;
+static std::unique_ptr<GridRenderer> grid_renderer = nullptr;
 
 static Camera camera{};
 static struct CameraState {
-    glm::vec3 position{0.0f, 0.0f, -3.0f};
-    glm::vec3 rotation{0.0f, 0.0f, 0.0f};
+    glm::vec3 position{0.0f, -1.5f, -3.0f};
+    glm::vec3 rotation{-0.45f, 0.0f, 0.0f};
     float fov = 45.0f;
     float aspectRatio = 1280.0f / 720.0f;
     float nearClip = 0.1f;
-    float farClip = 100.0f;
+    float farClip = 1000.0f;
 } cameraState;
 
 static bool opt_fullscreen = true;
@@ -349,10 +351,10 @@ int main(int, char**)
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
         // MARK: galaxy
-        // float deltaTime = io.DeltaTime;
-        // galaxy_system->updateCamera(deltaTime);
-        // galaxy_system->render(pass);
         float deltaTime = ImGui::GetIO().DeltaTime;
+        // galaxy_system->updateCamera(deltaTime);
+        galaxy_system->render(pass);
+        grid_renderer->render(pass, camera);
         triangle_renderer->update(deltaTime);
         triangle_renderer->render(pass, camera);
 
@@ -457,14 +459,19 @@ static bool InitWGPU(GLFWwindow* window)
 
     wgpuDeviceSetUncapturedErrorCallback(wgpu_device, wgpu_error_callback, nullptr);
 
-    // galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
-    // if (!galaxy_system) {
-    //     printf("Failed to create galaxy system!\n");
-    //     return false;
-    // }
+    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
+    if (!galaxy_system) {
+        printf("Failed to create galaxy system!\n");
+        return false;
+    }
     triangle_renderer = std::make_unique<TriangleRenderer>(wgpu_device);
     if (!triangle_renderer) {
         printf("Failed to create triangle renderer!\n");
+        return false;
+    }
+    grid_renderer = std::make_unique<GridRenderer>(wgpu_device);
+    if (!grid_renderer) {
+        printf("Failed to create grid renderer!\n");
         return false;
     }
 
