@@ -12,7 +12,7 @@
 #include "../external/imgui/backends/imgui_impl_glfw.h"
 #include "../external/imgui/backends/imgui_impl_wgpu.h"
 #include "../external/imgui/imgui_internal.h"
-#include "GalaxyWebSystem.h"
+#include "PointWebSystem.h"
 #include "TriangleRenderer.h"
 #include "Camera.h"
 #include "GridRenderer.h"
@@ -44,7 +44,7 @@ static WGPUSwapChain     wgpu_swap_chain = nullptr;
 static int               wgpu_swap_chain_width = 1280;
 static int               wgpu_swap_chain_height = 720;
 
-static std::unique_ptr<GalaxyWebSystem> galaxy_system = nullptr;
+static std::unique_ptr<PointWebSystem> point_system = nullptr;
 static std::unique_ptr<TriangleRenderer> triangle_renderer = nullptr;
 static std::unique_ptr<GridRenderer> grid_renderer = nullptr;
 
@@ -352,8 +352,7 @@ int main(int, char**)
 
         // MARK: galaxy
         float deltaTime = ImGui::GetIO().DeltaTime;
-        // galaxy_system->updateCamera(deltaTime);
-        galaxy_system->render(pass);
+        point_system->render(pass, camera);
         grid_renderer->render(pass, camera);
         triangle_renderer->update(deltaTime);
         triangle_renderer->render(pass, camera);
@@ -459,8 +458,8 @@ static bool InitWGPU(GLFWwindow* window)
 
     wgpuDeviceSetUncapturedErrorCallback(wgpu_device, wgpu_error_callback, nullptr);
 
-    galaxy_system = std::make_unique<GalaxyWebSystem>(wgpu_device);
-    if (!galaxy_system) {
+    point_system = std::make_unique<PointWebSystem>(wgpu_device);
+    if (!point_system) {
         printf("Failed to create galaxy system!\n");
         return false;
     }
