@@ -244,6 +244,8 @@ int main(int, char**)
         // float deltaTime = io.DeltaTime;
         // galaxy_system->updateCamera(deltaTime);
         // galaxy_system->render(pass);
+        float deltaTime = ImGui::GetIO().DeltaTime;
+        triangle_renderer->update(deltaTime);
         triangle_renderer->render(pass);
 
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);

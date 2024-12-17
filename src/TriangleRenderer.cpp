@@ -2,8 +2,11 @@
 #include <cstring>
 
 TriangleRenderer::TriangleRenderer(WGPUDevice device) : device(device) {
+    createUniformBuffer();
+    createBindGroup();
     createPipeline();
     createVertexBuffer();
+    updateUniformBuffer();
 }
 
 TriangleRenderer::~TriangleRenderer() {
@@ -12,19 +15,74 @@ TriangleRenderer::~TriangleRenderer() {
 
 void TriangleRenderer::cleanup() {
     if (vertexBuffer) wgpuBufferRelease(vertexBuffer);
+    if (uniformBuffer) wgpuBufferRelease(uniformBuffer);
     if (pipeline) wgpuRenderPipelineRelease(pipeline);
+    if (bindGroup) wgpuBindGroupRelease(bindGroup);
+    if (bindGroupLayout) wgpuBindGroupLayoutRelease(bindGroupLayout);
 }
 
-void TriangleRenderer::createVertexBuffer() {
-    WGPUBufferDescriptor bufferDesc = {};
-    bufferDesc.size = sizeof(vertices);
-    bufferDesc.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
-    bufferDesc.mappedAtCreation = true;
+void TriangleRenderer::update(float deltaTime) {
+    rotationAngle += deltaTime; // Rotate 1 radian per second
+    updateUniformBuffer();
+}
 
-    vertexBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
-    void* data = wgpuBufferGetMappedRange(vertexBuffer, 0, bufferDesc.size);
-    memcpy(data, vertices, sizeof(vertices));
-    wgpuBufferUnmap(vertexBuffer);
+void TriangleRenderer::createUniformBuffer() {
+    WGPUBufferDescriptor uniformDesc = {};
+    uniformDesc.size = sizeof(UniformData);
+    uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+    uniformBuffer = wgpuDeviceCreateBuffer(device, &uniformDesc);
+}
+
+void TriangleRenderer::updateUniformBuffer() {
+    // Create transformation matrices
+    glm::mat4 model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, -3.0f), // Camera position
+        glm::vec3(0.0f, 0.0f, 0.0f),  // Look at point
+        glm::vec3(0.0f, 1.0f, 0.0f)   // Up vector
+    );
+    glm::mat4 proj = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+    
+    // WebGPU's coordinate system has a different handedness than OpenGL
+    proj[1][1] *= -1;
+
+    uniformData.modelViewProj = proj * view * model;
+
+    // Update buffer
+    wgpuQueueWriteBuffer(
+        wgpuDeviceGetQueue(device),
+        uniformBuffer,
+        0,
+        &uniformData,
+        sizeof(UniformData)
+    );
+}
+
+void TriangleRenderer::createBindGroup() {
+    // Create bind group layout
+    WGPUBindGroupLayoutEntry bglEntry = {};
+    bglEntry.binding = 0;
+    bglEntry.visibility = WGPUShaderStage_Vertex;
+    bglEntry.buffer.type = WGPUBufferBindingType_Uniform;
+    bglEntry.buffer.minBindingSize = sizeof(UniformData);
+
+    WGPUBindGroupLayoutDescriptor bglDesc = {};
+    bglDesc.entryCount = 1;
+    bglDesc.entries = &bglEntry;
+    bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &bglDesc);
+
+    // Create bind group
+    WGPUBindGroupEntry bgEntry = {};
+    bgEntry.binding = 0;
+    bgEntry.buffer = uniformBuffer;
+    bgEntry.offset = 0;
+    bgEntry.size = sizeof(UniformData);
+
+    WGPUBindGroupDescriptor bgDesc = {};
+    bgDesc.layout = bindGroupLayout;
+    bgDesc.entryCount = 1;
+    bgDesc.entries = &bgEntry;
+    bindGroup = wgpuDeviceCreateBindGroup(device, &bgDesc);
 }
 
 void TriangleRenderer::createPipeline() {
@@ -32,8 +90,13 @@ void TriangleRenderer::createPipeline() {
     WGPUShaderModuleWGSLDescriptor wgslDesc = {};
     wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
     wgslDesc.code = R"(
+        struct Uniforms {
+            modelViewProj: mat4x4<f32>,
+        }
+        @binding(0) @group(0) var<uniform> uniforms: Uniforms;
+
         struct VertexInput {
-            @location(0) position: vec2f,
+            @location(0) position: vec3f,
             @location(1) color: vec3f,
         };
 
@@ -45,7 +108,7 @@ void TriangleRenderer::createPipeline() {
         @vertex
         fn vs_main(in: VertexInput) -> VertexOutput {
             var out: VertexOutput;
-            out.position = vec4f(in.position, 0.0, 1.0);
+            out.position = uniforms.modelViewProj * vec4f(in.position, 1.0);
             out.color = in.color;
             return out;
         }
@@ -63,12 +126,12 @@ void TriangleRenderer::createPipeline() {
     // Vertex state
     WGPUVertexAttribute attributes[2] = {};
     // Position attribute
-    attributes[0].format = WGPUVertexFormat_Float32x2;
+    attributes[0].format = WGPUVertexFormat_Float32x3;  // Now using 3D positions
     attributes[0].offset = 0;
     attributes[0].shaderLocation = 0;
     // Color attribute
     attributes[1].format = WGPUVertexFormat_Float32x3;
-    attributes[1].offset = 2 * sizeof(float);
+    attributes[1].offset = 3 * sizeof(float);  // Offset adjusted for 3D position
     attributes[1].shaderLocation = 1;
 
     WGPUVertexBufferLayout vertexBufferLayout = {};
@@ -79,8 +142,8 @@ void TriangleRenderer::createPipeline() {
 
     // Pipeline layout
     WGPUPipelineLayoutDescriptor layoutDesc = {};
-    layoutDesc.bindGroupLayoutCount = 0;
-    layoutDesc.bindGroupLayouts = nullptr;
+    layoutDesc.bindGroupLayoutCount = 1;
+    layoutDesc.bindGroupLayouts = &bindGroupLayout;
     WGPUPipelineLayout pipelineLayout = wgpuDeviceCreatePipelineLayout(device, &layoutDesc);
 
     // Fragment state
@@ -103,7 +166,7 @@ void TriangleRenderer::createPipeline() {
 
     // Multisample state
     WGPUMultisampleState multisample = {};
-    multisample.count = 1;  // No multisampling
+    multisample.count = 1;
     multisample.mask = 0xFFFFFFFF;
     multisample.alphaToCoverageEnabled = false;
 
@@ -119,8 +182,6 @@ void TriangleRenderer::createPipeline() {
     pipelineDesc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
     pipelineDesc.primitive.frontFace = WGPUFrontFace_CCW;
     pipelineDesc.primitive.cullMode = WGPUCullMode_None;
-
-    // Multisample state
     pipelineDesc.multisample = multisample;
 
     pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
@@ -129,8 +190,21 @@ void TriangleRenderer::createPipeline() {
     wgpuPipelineLayoutRelease(pipelineLayout);
 }
 
+void TriangleRenderer::createVertexBuffer() {
+    WGPUBufferDescriptor bufferDesc = {};
+    bufferDesc.size = sizeof(vertices);
+    bufferDesc.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
+    bufferDesc.mappedAtCreation = true;
+
+    vertexBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+    void* data = wgpuBufferGetMappedRange(vertexBuffer, 0, bufferDesc.size);
+    memcpy(data, vertices, sizeof(vertices));
+    wgpuBufferUnmap(vertexBuffer);
+}
+
 void TriangleRenderer::render(WGPURenderPassEncoder renderPass) {
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
+    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, sizeof(vertices));
     wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
 }
