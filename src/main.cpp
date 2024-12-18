@@ -352,7 +352,6 @@ int main(int, char**)
 
         // MARK: Render
         float deltaTime = ImGui::GetIO().DeltaTime;
-        point_system->update(deltaTime);
         point_system->render(pass, camera);
         grid_renderer->render(pass, camera);
         triangle_renderer->update(deltaTime);
