@@ -52,7 +52,7 @@ static Camera camera{};
 static struct CameraState {
     glm::vec3 position{0.0f, -1.5f, -3.0f};
     glm::vec3 rotation{-0.45f, 0.0f, 0.0f};
-    float fov = 45.0f;
+    float fov = 90.0f;
     float aspectRatio = 1280.0f / 720.0f;
     float nearClip = 0.1f;
     float farClip = 1000.0f;
@@ -350,7 +350,7 @@ int main(int, char**)
 
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
-        // MARK: galaxy
+        // MARK: Render
         float deltaTime = ImGui::GetIO().DeltaTime;
         point_system->update(deltaTime);
         point_system->render(pass, camera);
