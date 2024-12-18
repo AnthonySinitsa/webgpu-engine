@@ -16,12 +16,16 @@ PointWebSystem::~PointWebSystem() {
 
 void PointWebSystem::initPoints() {
     points.resize(NUM_POINTS);
-    float startX = -((NUM_POINTS - 1) * POINT_SPACING) / 2.0f;  // Center the line of points
+    
+    // Calculate angle step between points
+    const float angleStep = 2.0f * M_PI / NUM_POINTS;
     
     for (int i = 0; i < NUM_POINTS; i++) {
-        points[i].position[0] = startX + (i * POINT_SPACING);  // x position along a line
-        points[i].position[1] = -1.0f;                         // y position at center
-        points[i].position[2] = 0.0f;                         // z position at center
+        float angle = i * angleStep;
+        // Position points in a circle on the XZ plane (y = 0)
+        points[i].position[0] = CIRCLE_RADIUS * std::cos(angle); // x = r * cos(θ)
+        points[i].position[1] = -1.0f;                           // y = 0
+        points[i].position[2] = CIRCLE_RADIUS * std::sin(angle); // z = r * sin(θ)
     }
 }
 
@@ -51,6 +55,7 @@ void PointWebSystem::createPipelineAndResources() {
     wgslDesc.code = R"(
         struct Uniforms {
             viewProj: mat4x4<f32>,
+            time: f32,
         }
         @binding(0) @group(0) var<uniform> uniforms: Uniforms;
 
@@ -66,16 +71,42 @@ void PointWebSystem::createPipelineAndResources() {
         @vertex
         fn vs_main(in: VertexInput) -> VertexOutput {
             var out: VertexOutput;
-            out.position = uniforms.viewProj * vec4f(in.position, 1.0);
             
-            // Set fixed point size
-            out.pointSize = 10.0;
+            // Calculate rotation angle based on initial position and time
+            let baseAngle = atan2(in.position.z, in.position.x);
+            let rotationSpeed = 2.0 * 3.14159 * 0.5; // One rotation every 2 seconds
+            let angle = baseAngle + uniforms.time * rotationSpeed;
+            
+            // Calculate new position
+            let radius = length(vec2f(in.position.x, in.position.z));
+            let rotatedPos = vec3f(
+                radius * cos(angle),
+                in.position.y,
+                radius * sin(angle)
+            );
+            
+            let worldPos = vec4f(rotatedPos, 1.0);
+            out.position = uniforms.viewProj * worldPos;
+            
+            // Calculate point size based on distance to camera
+            let distanceToCamera = out.position.w;
+            out.pointSize = max(20.0 / distanceToCamera, 2.0);
+            
             return out;
         }
 
         @fragment
-        fn fs_main(@location(0) pointSize: f32) -> @location(0) vec4f {
-            return vec4f(1.0, 1.0, 1.0, 1.0);  // White points
+        fn fs_main(@builtin(position) pos: vec4f, @location(0) pointSize: f32) -> @location(0) vec4f {
+            // Calculate distance from fragment to point center
+            let center = vec2f(pos.x, pos.y);
+            let dist = length(center - floor(center));
+            
+            // Create a soft circular point
+            let fade = 1.0 - smoothstep(0.4, 0.5, dist);
+            
+            // Brighter center, fade to edges
+            let color = vec3f(1.0, 1.0, 1.0);  // White base color
+            return vec4f(color, fade);
         }
     )";
 
@@ -173,8 +204,19 @@ void PointWebSystem::createBindGroup() {
     bindGroup = wgpuDeviceCreateBindGroup(device, &bgDesc);
 }
 
+
+void PointWebSystem::update(float deltaTime) {
+    currentTime += deltaTime;
+    // Keep time within a reasonable range to avoid floating point precision issues
+    if (currentTime > 1000.0f) {
+        currentTime -= 1000.0f;
+    }
+}
+
+
 void PointWebSystem::updateUniforms(const Camera& camera) {
     uniformData.viewProj = camera.getProjection() * camera.getView();
+    uniformData.time = currentTime;
     
     wgpuQueueWriteBuffer(
         wgpuDeviceGetQueue(device),
