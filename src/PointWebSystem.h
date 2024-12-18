@@ -12,7 +12,8 @@ struct Point {
 };
 
 struct UniformData {
-    glm::mat4 viewProj;
+    alignas(16) glm::mat4 viewProj;  // 64 bytes, aligned to 16
+    alignas(16) float time;          // 4 bytes, aligned to 16
 };
 
 class PointWebSystem {
@@ -21,10 +22,12 @@ public:
     ~PointWebSystem();
 
     void render(WGPURenderPassEncoder renderPass, const Camera& camera);
+    void update(float deltaTime);
 
 private:
     static constexpr int NUM_POINTS = 10;
-    static constexpr float POINT_SPACING = 1.0f;
+    static constexpr float CIRCLE_RADIUS = 2.0f;
+    static constexpr float ROTATION_SPEED = 0.05f;
     
     void createPipelineAndResources();
     void createBuffers();
@@ -41,4 +44,5 @@ private:
 
     std::vector<Point> points;
     UniformData uniformData;
+    float currentTime = 0.0f;
 };
