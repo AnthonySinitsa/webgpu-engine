@@ -4668,6 +4668,8 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
 
   var _wgpuCommandEncoderRelease = (id) => WebGPU.mgrCommandEncoder.release(id);
 
+  var _wgpuComputePipelineRelease = (id) => WebGPU.mgrComputePipeline.release(id);
+
   var readI53FromI64 = (ptr) => {
       return HEAPU32[((ptr)>>2)] + HEAP32[(((ptr)+(4))>>2)] * 4294967296;
     };
@@ -4875,6 +4877,28 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
       }
       var device = WebGPU.mgrDevice.get(deviceId);
       return WebGPU.mgrCommandEncoder.create(device.createCommandEncoder(desc));
+    };
+
+  
+  var generateComputePipelineDesc = (descriptor) => {
+      assert(descriptor);assert(HEAPU32[((descriptor)>>2)] === 0);
+  
+      var desc = {
+        "label": undefined,
+        "layout": WebGPU.makePipelineLayout(
+          HEAPU32[(((descriptor)+(8))>>2)]),
+        "compute": WebGPU.makeProgrammableStageDescriptor(
+          descriptor + 12),
+      };
+      var labelPtr = HEAPU32[(((descriptor)+(4))>>2)];
+      if (labelPtr) desc["label"] = UTF8ToString(labelPtr);
+      return desc;
+    };
+  
+  var _wgpuDeviceCreateComputePipeline = (deviceId, descriptor) => {
+      var desc = generateComputePipelineDesc(descriptor);
+      var device = WebGPU.mgrDevice.get(deviceId);
+      return WebGPU.mgrComputePipeline.create(device.createComputePipeline(desc));
     };
 
   
@@ -5650,6 +5674,8 @@ var wasmImports = {
   /** @export */
   wgpuCommandEncoderRelease: _wgpuCommandEncoderRelease,
   /** @export */
+  wgpuComputePipelineRelease: _wgpuComputePipelineRelease,
+  /** @export */
   wgpuDeviceCreateBindGroup: _wgpuDeviceCreateBindGroup,
   /** @export */
   wgpuDeviceCreateBindGroupLayout: _wgpuDeviceCreateBindGroupLayout,
@@ -5657,6 +5683,8 @@ var wasmImports = {
   wgpuDeviceCreateBuffer: _wgpuDeviceCreateBuffer,
   /** @export */
   wgpuDeviceCreateCommandEncoder: _wgpuDeviceCreateCommandEncoder,
+  /** @export */
+  wgpuDeviceCreateComputePipeline: _wgpuDeviceCreateComputePipeline,
   /** @export */
   wgpuDeviceCreatePipelineLayout: _wgpuDeviceCreatePipelineLayout,
   /** @export */
