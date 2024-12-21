@@ -4549,6 +4549,36 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
   var _wgpuCommandBufferRelease = (id) => WebGPU.mgrCommandBuffer.release(id);
 
   
+  var _wgpuCommandEncoderBeginComputePass = (encoderId, descriptor) => {
+      var desc;
+  
+      function makeComputePassTimestampWrites(twPtr) {
+        if (twPtr === 0) return undefined;
+  
+        return {
+          "querySet": WebGPU.mgrQuerySet.get(
+            HEAPU32[((twPtr)>>2)]),
+          "beginningOfPassWriteIndex": HEAPU32[(((twPtr)+(4))>>2)],
+          "endOfPassWriteIndex": HEAPU32[(((twPtr)+(8))>>2)],
+        };
+      }
+  
+      if (descriptor) {
+        assert(descriptor);assert(HEAPU32[((descriptor)>>2)] === 0);
+        desc = {
+          "label": undefined,
+          "timestampWrites": makeComputePassTimestampWrites(
+            HEAPU32[(((descriptor)+(8))>>2)]),
+        };
+        var labelPtr = HEAPU32[(((descriptor)+(4))>>2)];
+        if (labelPtr) desc["label"] = UTF8ToString(labelPtr);
+  
+      }
+      var commandEncoder = WebGPU.mgrCommandEncoder.get(encoderId);
+      return WebGPU.mgrComputePassEncoder.create(commandEncoder.beginComputePass(desc));
+    };
+
+  
   var _wgpuCommandEncoderBeginRenderPass = (encoderId, descriptor) => {
       assert(descriptor);
   
@@ -4667,6 +4697,38 @@ function ImGui_ImplGlfw_EmscriptenOpenURL(url) { url = url ? UTF8ToString(url) :
     };
 
   var _wgpuCommandEncoderRelease = (id) => WebGPU.mgrCommandEncoder.release(id);
+
+  var _wgpuComputePassEncoderDispatchWorkgroups = (passId, x, y, z) => {
+      var pass = WebGPU.mgrComputePassEncoder.get(passId);
+      pass.dispatchWorkgroups(x, y, z);
+    };
+
+  var _wgpuComputePassEncoderEnd = (passId) => {
+      var pass = WebGPU.mgrComputePassEncoder.get(passId);
+      pass.end();
+    };
+
+  var _wgpuComputePassEncoderRelease = (id) => WebGPU.mgrComputePassEncoder.release(id);
+
+  var _wgpuComputePassEncoderSetBindGroup = (passId, groupIndex, groupId, dynamicOffsetCount, dynamicOffsetsPtr) => {
+      var pass = WebGPU.mgrComputePassEncoder.get(passId);
+      var group = WebGPU.mgrBindGroup.get(groupId);
+      if (dynamicOffsetCount == 0) {
+        pass.setBindGroup(groupIndex, group);
+      } else {
+        var offsets = [];
+        for (var i = 0; i < dynamicOffsetCount; i++, dynamicOffsetsPtr += 4) {
+          offsets.push(HEAPU32[((dynamicOffsetsPtr)>>2)]);
+        }
+        pass.setBindGroup(groupIndex, group, offsets);
+      }
+    };
+
+  var _wgpuComputePassEncoderSetPipeline = (passId, pipelineId) => {
+      var pass = WebGPU.mgrComputePassEncoder.get(passId);
+      var pipeline = WebGPU.mgrComputePipeline.get(pipelineId);
+      pass.setPipeline(pipeline);
+    };
 
   var _wgpuComputePipelineRelease = (id) => WebGPU.mgrComputePipeline.release(id);
 
@@ -5668,11 +5730,23 @@ var wasmImports = {
   /** @export */
   wgpuCommandBufferRelease: _wgpuCommandBufferRelease,
   /** @export */
+  wgpuCommandEncoderBeginComputePass: _wgpuCommandEncoderBeginComputePass,
+  /** @export */
   wgpuCommandEncoderBeginRenderPass: _wgpuCommandEncoderBeginRenderPass,
   /** @export */
   wgpuCommandEncoderFinish: _wgpuCommandEncoderFinish,
   /** @export */
   wgpuCommandEncoderRelease: _wgpuCommandEncoderRelease,
+  /** @export */
+  wgpuComputePassEncoderDispatchWorkgroups: _wgpuComputePassEncoderDispatchWorkgroups,
+  /** @export */
+  wgpuComputePassEncoderEnd: _wgpuComputePassEncoderEnd,
+  /** @export */
+  wgpuComputePassEncoderRelease: _wgpuComputePassEncoderRelease,
+  /** @export */
+  wgpuComputePassEncoderSetBindGroup: _wgpuComputePassEncoderSetBindGroup,
+  /** @export */
+  wgpuComputePassEncoderSetPipeline: _wgpuComputePassEncoderSetPipeline,
   /** @export */
   wgpuComputePipelineRelease: _wgpuComputePipelineRelease,
   /** @export */

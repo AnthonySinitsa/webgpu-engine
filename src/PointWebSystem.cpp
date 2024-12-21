@@ -7,6 +7,7 @@ PointWebSystem::PointWebSystem(WGPUDevice device) : device(device) {
     createBuffers();
     createPipelineAndResources();
     createComputePipeline();
+    createBindGroups();
 }
 
 PointWebSystem::~PointWebSystem() {
@@ -235,6 +236,17 @@ void PointWebSystem::createComputePipeline() {
     // Cleanup
     wgpuShaderModuleRelease(computeShaderModule);
     wgpuPipelineLayoutRelease(computePipelineLayout);
+}
+
+
+void PointWebSystem::compute(WGPUComputePassEncoder computePass) {
+    wgpuComputePassEncoderSetPipeline(computePass, computePipeline);
+    wgpuComputePassEncoderSetBindGroup(computePass, 0, 
+        useBufferA ? computeBindGroupA : computeBindGroupB, 0, nullptr);
+        
+    // Calculate workgroup count to cover all points
+    uint32_t workgroupCount = (NUM_POINTS + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+    wgpuComputePassEncoderDispatchWorkgroups(computePass, workgroupCount, 1, 1);
 }
 
 

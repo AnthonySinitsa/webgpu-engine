@@ -348,6 +348,12 @@ int main(int, char**)
         WGPUCommandEncoderDescriptor enc_desc = {};
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu_device, &enc_desc);
 
+        WGPUComputePassDescriptor computePassDesc = {};
+        WGPUComputePassEncoder computePass = wgpuCommandEncoderBeginComputePass(encoder, &computePassDesc);
+        point_system->compute(computePass);
+        wgpuComputePassEncoderEnd(computePass);
+        wgpuComputePassEncoderRelease(computePass);
+
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
         // MARK: Render
