@@ -30,6 +30,10 @@ void PointWebSystem::initPoints() {
         points[i].position[0] = (i - NUM_POINTS/2) * POINT_SPACING; // X position
         points[i].position[1] = -1.0f;                              // Y position
         points[i].position[2] = 0.0f;                               // Z position
+        printf("Point %d: pos(%.2f, %.2f, %.2f)\n", i, 
+               points[i].position[0], 
+               points[i].position[1], 
+               points[i].position[2]);
     }
 }
 
@@ -75,46 +79,33 @@ void PointWebSystem::createPipelineAndResources() {
     WGPUShaderModuleWGSLDescriptor wgslDesc = {};
     wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
     wgslDesc.code = R"(
-        struct Uniforms {
-            viewProj: mat4x4<f32>,
-        }
-        @binding(0) @group(0) var<uniform> uniforms: Uniforms;
+            struct Uniforms {
+                viewProj: mat4x4<f32>,
+            }
+            @binding(0) @group(0) var<uniform> uniforms: Uniforms;
 
-        struct VertexInput {
-            @location(0) position: vec3f,
-        };
+            struct VertexInput {
+                @location(0) position: vec3f,
+            };
 
-        struct VertexOutput {
-            @builtin(position) position: vec4f,
-            @location(0) pointSize: f32,
-        };
+            struct VertexOutput {
+                @builtin(position) position: vec4f,
+            };
 
-        @vertex
-        fn vs_main(in: VertexInput) -> VertexOutput {
-            var out: VertexOutput;
-            let worldPos = vec4f(in.position, 1.0);
-            out.position = uniforms.viewProj * worldPos;
-            
-            // Calculate point size based on distance to camera
-            let distanceToCamera = out.position.w;
-            out.pointSize = max(20.0 / distanceToCamera, 2.0);
-            
-            return out;
-        }
+            @vertex
+            fn vs_main(in: VertexInput) -> VertexOutput {
+                var out: VertexOutput;
+                let worldPos = vec4f(in.position, 1.0);
+                out.position = uniforms.viewProj * worldPos;
+                return out;
+            }
 
-        @fragment
-        fn fs_main(@builtin(position) pos: vec4f, @location(0) pointSize: f32) -> @location(0) vec4f {
-            // Calculate distance from fragment to point center
-            let center = vec2f(pos.x, pos.y);
-            let dist = length(center - floor(center));
-            
-            // Create a soft circular point
-            let fade = 1.0 - smoothstep(0.4, 0.5, dist);
-            
-            // Use white color with soft edges
-            return vec4f(1.0, 1.0, 1.0, fade);
-        }
-    )";
+            @fragment
+            fn fs_main() -> @location(0) vec4f {
+                // Fixed white color for testing
+                return vec4f(1.0, 1.0, 1.0, 1.0);
+            }
+        )";
 
     WGPUShaderModuleDescriptor shaderDesc = {};
     shaderDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&wgslDesc);
