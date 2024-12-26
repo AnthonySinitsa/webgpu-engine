@@ -210,7 +210,7 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 
-    // Setup Dear ImGui style
+    // MARK: Setup Dear ImGui style
     ImGui::StyleColorsDark();
     // ImGui::StyleColorsLight();
 
@@ -347,6 +347,12 @@ int main(int, char**)
 
         WGPUCommandEncoderDescriptor enc_desc = {};
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu_device, &enc_desc);
+
+        WGPUComputePassDescriptor computePassDesc = {};
+        WGPUComputePassEncoder computePass = wgpuCommandEncoderBeginComputePass(encoder, &computePassDesc);
+        point_system->compute(computePass);
+        wgpuComputePassEncoderEnd(computePass);
+        wgpuComputePassEncoderRelease(computePass);
 
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
