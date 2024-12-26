@@ -7,7 +7,8 @@
 #include "Camera.h"
 
 struct Point {
-    float position[3];  // x, y, z position
+    alignas(16) float position[3];  // x, y, z position
+    alignas(16) float velocity[3];  // x, y, z velocity
 };
 
 struct UniformData {

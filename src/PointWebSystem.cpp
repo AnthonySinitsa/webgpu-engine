@@ -23,18 +23,19 @@ PointWebSystem::~PointWebSystem() {
     if (computeBindGroupLayout) wgpuBindGroupLayoutRelease(computeBindGroupLayout);
 }
 
+// MARK: initPoints
 void PointWebSystem::initPoints() {
     points.resize(NUM_POINTS);
     
-    // Initialize points in a straight line along the X axis
     for (int i = 0; i < NUM_POINTS; i++) {
         points[i].position[0] = (i - NUM_POINTS/2) * POINT_SPACING; // X position
         points[i].position[1] = -1.0f;                              // Y position
-        points[i].position[2] = 0.0f;                               // Z position
-        printf("Point %d: pos(%.2f, %.2f, %.2f)\n", i, 
-               points[i].position[0], 
-               points[i].position[1], 
-               points[i].position[2]);
+        points[i].position[2] = 0.0f;                              // Z position
+        
+        // Initialize velocity (only upward movement for now)
+        points[i].velocity[0] = 0.0f;
+        points[i].velocity[1] = 1.0f;  // Upward velocity
+        points[i].velocity[2] = 0.0f;
     }
 }
 
@@ -121,7 +122,7 @@ void PointWebSystem::createPipelineAndResources() {
     // Set up vertex attributes and buffer layout
     WGPUVertexAttribute attribute = {};
     attribute.format = WGPUVertexFormat_Float32x3;
-    attribute.offset = 0;
+    attribute.offset = offsetof(Point, position);
     attribute.shaderLocation = 0;
 
     WGPUVertexBufferLayout vertexBufferLayout = {};
@@ -203,7 +204,8 @@ void PointWebSystem::createComputePipeline() {
     computeWGSLDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
     computeWGSLDesc.code = R"(
         struct Point {
-            position: vec3f,
+            @align(16) position: vec3f,
+            @align(16) velocity: vec3f,
         }
 
         @group(0) @binding(0) var<storage, read> input: array<Point>;
@@ -216,8 +218,17 @@ void PointWebSystem::createComputePipeline() {
                 return;
             }
 
-            // For now, just copy the position
-            output[index].position = input[index].position;
+            var point = input[index];
+            
+            // Update position based on velocity
+            point.position += point.velocity * 0.016;  // Assuming ~60fps, deltaTime ≈ 0.016
+            
+            // Keep position in a reasonable range (optional)
+            if (point.position.y > 5.0) {
+                point.position.y = -1.0;  // Reset position when too high
+            }
+            
+            output[index] = point;
         }
     )";
 

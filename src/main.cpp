@@ -210,7 +210,7 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 
-    // Setup Dear ImGui style
+    // MARK: Setup Dear ImGui style
     ImGui::StyleColorsDark();
     // ImGui::StyleColorsLight();
 
