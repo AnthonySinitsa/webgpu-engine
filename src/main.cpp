@@ -48,10 +48,11 @@ static std::unique_ptr<PointWebSystem> point_system = nullptr;
 static std::unique_ptr<TriangleRenderer> triangle_renderer = nullptr;
 static std::unique_ptr<GridRenderer> grid_renderer = nullptr;
 
+// MARK: Camera
 static Camera camera{};
 static struct CameraState {
-    glm::vec3 position{0.0f, -1.5f, -3.0f};
-    glm::vec3 rotation{-0.45f, 0.0f, 0.0f};
+    glm::vec3 position{0.0f, -10.0f, -12.0f};
+    glm::vec3 rotation{-1.0f, 0.0f, 0.0f};
     float fov = 90.0f;
     float aspectRatio = 1280.0f / 720.0f;
     float nearClip = 0.1f;
@@ -357,11 +358,11 @@ int main(int, char**)
         WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
 
         // MARK: Render
-        float deltaTime = ImGui::GetIO().DeltaTime;
+        // float deltaTime = ImGui::GetIO().DeltaTime;
         point_system->render(pass, camera);
         grid_renderer->render(pass, camera);
-        triangle_renderer->update(deltaTime);
-        triangle_renderer->render(pass, camera);
+        // triangle_renderer->update(deltaTime);
+        // triangle_renderer->render(pass, camera);
 
         ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
         wgpuRenderPassEncoderEnd(pass);

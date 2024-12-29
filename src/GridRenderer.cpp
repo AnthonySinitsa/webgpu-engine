@@ -44,12 +44,12 @@ std::vector<GridRenderer::Vertex> GridRenderer::generateGridVertices() {
     }
 
     // Add X axis (red)
-    gridVertices.push_back({{-halfSize, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}});
-    gridVertices.push_back({{halfSize, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}});
+    gridVertices.push_back({{-halfSize, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}});
+    gridVertices.push_back({{halfSize, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}});
 
     // Add Z axis (blue)
-    gridVertices.push_back({{0.0f, 0.0f, -halfSize}, {0.0f, 0.0f, 1.0f, 1.0f}});
-    gridVertices.push_back({{0.0f, 0.0f, halfSize}, {0.0f, 0.0f, 1.0f, 1.0f}});
+    gridVertices.push_back({{0.0f, 0.0f, -halfSize}, {1.0f, 1.0f, 1.0f, 1.0f}});
+    gridVertices.push_back({{0.0f, 0.0f, halfSize}, {1.0f, 1.0f, 1.0f, 1.0f}});
 
     return gridVertices;
 }

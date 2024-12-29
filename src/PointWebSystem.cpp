@@ -275,7 +275,7 @@ void PointWebSystem::createComputePipeline() {
         @group(0) @binding(1) var<storage, read_write> output: array<Point>;
         @group(0) @binding(2) var<storage, read> ellipses: array<EllipseParams>;
 
-        const BASE_ROTATION_SPEED: f32 = -0.05;
+        const BASE_ROTATION_SPEED: f32 = -0.01;
         const SPEED_MULTIPLIER: f32 = 20.0;
 
         fn hash(n: u32) -> f32 {
