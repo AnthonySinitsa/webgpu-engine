@@ -1,3 +1,21 @@
+# Galaxy Simulation Engine
+
+![1.83](images/1.83radius.gif)
+
+A real-time particle system simulating galactic motion using [Vulkan/WebGPU].
+
+## Live Demo (for WebGPU version only)
+
+[WebGPU Engine](https://webgpu-engine.netlify.app)
+
+> Note: Requires a browser with WebGPU support (ie. Chrome)
+
+## Related Project
+
+This project is part of a series of galaxy simulation implementations:
+
+- [Galaxy Simulation (Vulkan)](https://github.com/AnthonySinitsa/VoxelEngine) - Original implementation using the Vulkan API
+
 ## How to Build
 
 - `source ./emsdk_env.sh`
@@ -8,7 +26,7 @@
 
 - You may also refer to our [Continuous Integration setup](https://github.com/ocornut/imgui/tree/master/.github/workflows) for Emscripten setup.
 
-- Then build using `make -f Makefile.emscripten` while in the `example_glfw_wgpu/` directory.
+- Then build using `make -f Makefile.emscripten`.
 
 - Requires recent Emscripten as WGPU is still a work-in-progress API.
 
