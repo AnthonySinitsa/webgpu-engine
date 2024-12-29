@@ -21,22 +21,65 @@ PointWebSystem::~PointWebSystem() {
     if (computeBindGroupB) wgpuBindGroupRelease(computeBindGroupB);
     if (renderBindGroupLayout) wgpuBindGroupLayoutRelease(renderBindGroupLayout);
     if (computeBindGroupLayout) wgpuBindGroupLayoutRelease(computeBindGroupLayout);
+    if (ellipseBuffer) wgpuBufferRelease(ellipseBuffer);
 }
 
 // MARK: initPoints
 void PointWebSystem::initPoints() {
     points.resize(NUM_POINTS);
     
-    for (int i = 0; i < NUM_POINTS; i++) {
-        points[i].position[0] = (i - NUM_POINTS/2) * POINT_SPACING; // X position
-        points[i].position[1] = -1.0f;                              // Y position
-        points[i].position[2] = 0.0f;                              // Z position
-        
-        // Initialize velocity (only upward movement for now)
-        points[i].velocity[0] = 0.0f;
-        points[i].velocity[1] = 1.0f;  // Upward velocity
-        points[i].velocity[2] = 0.0f;
+    int starsPerEllipse = NUM_POINTS / MAX_ELLIPSES;
+    float currentEllipseSize = 1.83f; // Base radius from galaxy system
+    float tiltIncrement = 0.16f;      // From galaxy system
+    
+    for (int ellipseIndex = 0; ellipseIndex < MAX_ELLIPSES; ellipseIndex++) {
+        int startIndex = ellipseIndex * starsPerEllipse;
+        int endIndex = (ellipseIndex == MAX_ELLIPSES - 1) ? NUM_POINTS : startIndex + starsPerEllipse;
+        int starsInThisEllipse = endIndex - startIndex;
+
+        float angleStep = (2.0f * 3.14159f) / starsInThisEllipse;
+        float currentTilt = ellipseIndex * tiltIncrement;
+
+        for (int i = startIndex; i < endIndex; i++) {
+            float t = (i - startIndex) * angleStep;
+            
+            // Base position calculation
+            float x = currentEllipseSize * cos(t) * cos(currentTilt);
+            float z = currentEllipseSize * cos(t) * sin(currentTilt);
+            
+            // Calculate height using rough approximation of de Vaucouleurs's Law
+            float radius = sqrt(x * x + z * z) + 0.0001f;
+            float baseHeight = 0.5f * exp(-1.4f * pow(radius/3.66f, 0.25f));
+            float randomizedHeight = baseHeight * (hash(i) * 2.0f - 1.0f);
+
+            // Random offset for more natural distribution
+            float randRadius = hash(i * 12.345f) * currentEllipseSize;
+            float randAngle = hash(i * 67.890f) * 2.0f * 3.14159f;
+            
+            // Calculate offsets
+            float offsetX = randRadius * cos(randAngle);
+            float offsetZ = randRadius * sin(randAngle);
+
+            // Set final position
+            points[i].position[0] = x + offsetX;
+            points[i].position[1] = randomizedHeight;
+            points[i].position[2] = z + offsetZ;
+
+            // Store parameters in velocity for compute shader
+            points[i].velocity[0] = t;                // angle
+            points[i].velocity[1] = randomizedHeight; // stored height
+            points[i].velocity[2] = randRadius;       // radial offset
+        }
+
+        currentEllipseSize += 0.5f; // Increment size for next ellipse
     }
+}
+
+// Helper function for hash (used in initialization)
+float PointWebSystem::hash(uint32_t n) {
+    n = (n << 13U) ^ n;
+    n = n * (n * n * 15731U + 0x789221U) + 0x137631U;
+    return float(n & 0x7fffffffU) / float(0x7fffffff);
 }
 
 void PointWebSystem::createPipelineAndResources() {
@@ -177,27 +220,41 @@ void PointWebSystem::createPipelineAndResources() {
 
 
 void PointWebSystem::createComputePipeline() {
-    // Create compute bind group layout
-    WGPUBindGroupLayoutEntry computeEntries[2] = {};
-    // Input buffer - Change to read-only storage 
-    computeEntries[0].binding = 0;
-    computeEntries[0].visibility = WGPUShaderStage_Compute;
-    computeEntries[0].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
-    // Output buffer - This remains read-write storage
-    computeEntries[1].binding = 1;
-    computeEntries[1].visibility = WGPUShaderStage_Compute;
-    computeEntries[1].buffer.type = WGPUBufferBindingType_Storage;
+    // First create the compute bind group layout
+    WGPUBindGroupLayoutEntry layoutEntries[3] = {};
+    // Input buffer
+    layoutEntries[0].binding = 0;
+    layoutEntries[0].visibility = WGPUShaderStage_Compute;
+    layoutEntries[0].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+    // Output buffer
+    layoutEntries[1].binding = 1;
+    layoutEntries[1].visibility = WGPUShaderStage_Compute;
+    layoutEntries[1].buffer.type = WGPUBufferBindingType_Storage;
+    // Ellipse parameters buffer
+    layoutEntries[2].binding = 2;
+    layoutEntries[2].visibility = WGPUShaderStage_Compute;
+    layoutEntries[2].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
 
-    WGPUBindGroupLayoutDescriptor computeBglDesc = {};
-    computeBglDesc.entryCount = 2;
-    computeBglDesc.entries = computeEntries;
-    computeBindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &computeBglDesc);
+    WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc = {};
+    bindGroupLayoutDesc.entryCount = 3;
+    bindGroupLayoutDesc.entries = layoutEntries;
+    computeBindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDesc);
 
-    // Create pipeline layout
-    WGPUPipelineLayoutDescriptor computeLayoutDesc = {};
-    computeLayoutDesc.bindGroupLayoutCount = 1;
-    computeLayoutDesc.bindGroupLayouts = &computeBindGroupLayout;
-    WGPUPipelineLayout computePipelineLayout = wgpuDeviceCreatePipelineLayout(device, &computeLayoutDesc);
+    if (!computeBindGroupLayout) {
+        printf("Failed to create compute bind group layout!\n");
+        return;
+    }
+
+    // Now create the pipeline layout using the bind group layout
+    WGPUPipelineLayoutDescriptor pipelineLayoutDesc = {};
+    pipelineLayoutDesc.bindGroupLayoutCount = 1;
+    pipelineLayoutDesc.bindGroupLayouts = &computeBindGroupLayout;
+    WGPUPipelineLayout pipelineLayout = wgpuDeviceCreatePipelineLayout(device, &pipelineLayoutDesc);
+
+    if (!pipelineLayout) {
+        printf("Failed to create compute pipeline layout!\n");
+        return;
+    }
 
     // Create compute shader
     WGPUShaderModuleWGSLDescriptor computeWGSLDesc = {};
@@ -208,8 +265,25 @@ void PointWebSystem::createComputePipeline() {
             @align(16) velocity: vec3f,
         }
 
+        struct EllipseParams {
+            majorAxis: f32,
+            minorAxis: f32,
+            tiltAngle: f32,
+        }
+
         @group(0) @binding(0) var<storage, read> input: array<Point>;
         @group(0) @binding(1) var<storage, read_write> output: array<Point>;
+        @group(0) @binding(2) var<storage, read> ellipses: array<EllipseParams>;
+
+        const BASE_ROTATION_SPEED: f32 = -0.05;
+        const SPEED_MULTIPLIER: f32 = 20.0;
+
+        fn hash(n: u32) -> f32 {
+            var nn = n;
+            nn = (nn << 13u) ^ nn;
+            nn = nn * (nn * nn * 15731u + 0x789221u) + 0x137631u;
+            return f32(nn & 0x7fffffffu) / f32(0x7fffffff);
+        }
 
         @compute @workgroup_size(256)
         fn main(@builtin(global_invocation_id) global_id : vec3u) {
@@ -218,35 +292,69 @@ void PointWebSystem::createComputePipeline() {
                 return;
             }
 
-            var point = input[index];
-            
-            // Update position based on velocity
-            point.position += point.velocity * 0.016;  // Assuming ~60fps, deltaTime ≈ 0.016
-            
-            // Keep position in a reasonable range (optional)
-            if (point.position.y > 5.0) {
-                point.position.y = -1.0;  // Reset position when too high
+            let starsPerEllipse = arrayLength(&input) / arrayLength(&ellipses);
+            let ellipseIndex = min(index / starsPerEllipse, arrayLength(&ellipses) - 1);
+            let params = ellipses[ellipseIndex];
+
+            // Get stored parameters
+            let currentAngle = input[index].velocity.x;
+            let storedHeight = input[index].velocity.y;
+            let radialOffset = input[index].velocity.z;
+
+            // Calculate rotation speed based on ellipse size
+            let speedFactor = SPEED_MULTIPLIER / max(params.majorAxis, 0.1);
+            let rotationSpeed = BASE_ROTATION_SPEED * speedFactor;
+
+            // Update angle
+            var newAngle = currentAngle + rotationSpeed * 0.016;
+            if (newAngle > 6.28318) {
+                newAngle = newAngle - 6.28318;
             }
-            
-            output[index] = point;
+
+            // Calculate base ellipse position
+            let x = params.majorAxis * cos(newAngle) * cos(params.tiltAngle) -
+                    params.minorAxis * sin(newAngle) * sin(params.tiltAngle);
+            let z = params.majorAxis * cos(newAngle) * sin(params.tiltAngle) +
+                    params.minorAxis * sin(newAngle) * cos(params.tiltAngle);
+
+            // Apply stored radial offset in orbital plane
+            let offsetAngle = newAngle + radialOffset;
+            let offset = vec3f(
+                cos(offsetAngle) * radialOffset,
+                0.0,
+                sin(offsetAngle) * radialOffset
+            );
+
+            // Combine position with stored height
+            let newPosition = vec3f(x, storedHeight, z) + offset;
+
+            // Update the point
+            output[index].position = newPosition;
+            output[index].velocity = vec3f(newAngle, storedHeight, radialOffset);
         }
     )";
 
-    WGPUShaderModuleDescriptor computeShaderDesc = {};
-    computeShaderDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&computeWGSLDesc);
-    WGPUShaderModule computeShaderModule = wgpuDeviceCreateShaderModule(device, &computeShaderDesc);
+    WGPUShaderModuleDescriptor shaderDesc = {};
+    shaderDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&computeWGSLDesc);
+    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
 
-    // Create compute pipeline
-    WGPUComputePipelineDescriptor computePipelineDesc = {};
-    computePipelineDesc.layout = computePipelineLayout;
-    computePipelineDesc.compute.module = computeShaderModule;
-    computePipelineDesc.compute.entryPoint = "main";
+    if (!shaderModule) {
+        printf("Failed to create compute shader module!\n");
+        wgpuPipelineLayoutRelease(pipelineLayout);
+        return;
+    }
 
-    computePipeline = wgpuDeviceCreateComputePipeline(device, &computePipelineDesc);
+    // Create the compute pipeline
+    WGPUComputePipelineDescriptor pipelineDesc = {};
+    pipelineDesc.layout = pipelineLayout;
+    pipelineDesc.compute.module = shaderModule;
+    pipelineDesc.compute.entryPoint = "main";
+
+    computePipeline = wgpuDeviceCreateComputePipeline(device, &pipelineDesc);
 
     // Cleanup
-    wgpuShaderModuleRelease(computeShaderModule);
-    wgpuPipelineLayoutRelease(computePipelineLayout);
+    wgpuShaderModuleRelease(shaderModule);
+    wgpuPipelineLayoutRelease(pipelineLayout);
 }
 
 
@@ -287,15 +395,40 @@ void PointWebSystem::createBuffers() {
     uniformDesc.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
     uniformDesc.mappedAtCreation = false;
     uniformBuffer = wgpuDeviceCreateBuffer(device, &uniformDesc);
+
+    // Create ellipse parameters buffer
+    WGPUBufferDescriptor ellipseBufferDesc = {};
+    ellipseBufferDesc.size = sizeof(EllipseParams) * MAX_ELLIPSES;
+    ellipseBufferDesc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst;
+    ellipseBufferDesc.mappedAtCreation = true;
+    
+    ellipseBuffer = wgpuDeviceCreateBuffer(device, &ellipseBufferDesc);
+    
+    // Initialize ellipse parameters
+    ellipseParams.resize(MAX_ELLIPSES);
+    float currentRadius = 1.83f; // Base radius
+    float tiltIncrement = 0.16f;
+    
+    for (int i = 0; i < MAX_ELLIPSES; i++) {
+        ellipseParams[i].majorAxis = currentRadius;
+        ellipseParams[i].minorAxis = currentRadius * 0.8f; // eccentricity of 0.8
+        ellipseParams[i].tiltAngle = i * tiltIncrement;
+        currentRadius += 0.5f;
+    }
+    
+    // Copy ellipse parameters to buffer
+    void* ellipseData = wgpuBufferGetMappedRange(ellipseBuffer, 0, ellipseBufferDesc.size);
+    memcpy(ellipseData, ellipseParams.data(), ellipseBufferDesc.size);
+    wgpuBufferUnmap(ellipseBuffer);
 }
 
 void PointWebSystem::createBindGroups() {
+    // First create render bind group (this part remains unchanged)
     if (!renderBindGroupLayout) {
         printf("Error: renderBindGroupLayout is null!\n");
         return;
     }
 
-    // Create render bind group
     WGPUBindGroupEntry renderEntry = {};
     renderEntry.binding = 0;
     renderEntry.buffer = uniformBuffer;
@@ -307,55 +440,82 @@ void PointWebSystem::createBindGroups() {
     renderBgDesc.entryCount = 1;
     renderBgDesc.entries = &renderEntry;
 
-    printf("Creating render bind group with layout: %p\n", (void*)renderBgDesc.layout);
-
     renderBindGroup = wgpuDeviceCreateBindGroup(device, &renderBgDesc);
     if (!renderBindGroup) {
         printf("Failed to create render bind group!\n");
         return;
     }
 
-    // Create compute bind groups for double buffering
-    WGPUBindGroupEntry computeEntriesA[2] = {};
-    computeEntriesA[0].binding = 0;
-    computeEntriesA[0].buffer = vertexBufferA;
-    computeEntriesA[0].offset = 0;
-    computeEntriesA[0].size = sizeof(Point) * NUM_POINTS;
-    computeEntriesA[1].binding = 1;
-    computeEntriesA[1].buffer = vertexBufferB;
-    computeEntriesA[1].offset = 0;
-    computeEntriesA[1].size = sizeof(Point) * NUM_POINTS;
+    // Create compute bind group layout first
+    WGPUBindGroupLayoutEntry computeEntries[3] = {};
+    // Input buffer
+    computeEntries[0].binding = 0;
+    computeEntries[0].visibility = WGPUShaderStage_Compute;
+    computeEntries[0].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+    // Output buffer
+    computeEntries[1].binding = 1;
+    computeEntries[1].visibility = WGPUShaderStage_Compute;
+    computeEntries[1].buffer.type = WGPUBufferBindingType_Storage;
+    // Ellipse parameters buffer
+    computeEntries[2].binding = 2;
+    computeEntries[2].visibility = WGPUShaderStage_Compute;
+    computeEntries[2].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
 
-    WGPUBindGroupDescriptor computeBgDescA = {};
-    computeBgDescA.layout = computeBindGroupLayout;
-    computeBgDescA.entryCount = 2;
-    computeBgDescA.entries = computeEntriesA;
+    WGPUBindGroupLayoutDescriptor computeBglDesc = {};
+    computeBglDesc.entryCount = 3;
+    computeBglDesc.entries = computeEntries;
+    computeBindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &computeBglDesc);
 
-    computeBindGroupA = wgpuDeviceCreateBindGroup(device, &computeBgDescA);
-    if (!computeBindGroupLayout) {
-        printf("Error: computeBindGroupLayoutA is null!\n");
-        return;
+    // Create bind groups for compute shader
+    {
+        WGPUBindGroupEntry entriesA[3] = {};
+        // Input buffer A
+        entriesA[0].binding = 0;
+        entriesA[0].buffer = vertexBufferA;
+        entriesA[0].offset = 0;
+        entriesA[0].size = sizeof(Point) * NUM_POINTS;
+        // Output buffer B
+        entriesA[1].binding = 1;
+        entriesA[1].buffer = vertexBufferB;
+        entriesA[1].offset = 0;
+        entriesA[1].size = sizeof(Point) * NUM_POINTS;
+        // Ellipse buffer
+        entriesA[2].binding = 2;
+        entriesA[2].buffer = ellipseBuffer;
+        entriesA[2].offset = 0;
+        entriesA[2].size = sizeof(EllipseParams) * MAX_ELLIPSES;
+
+        WGPUBindGroupDescriptor bgDescA = {};
+        bgDescA.layout = computeBindGroupLayout;
+        bgDescA.entryCount = 3;
+        bgDescA.entries = entriesA;
+        computeBindGroupA = wgpuDeviceCreateBindGroup(device, &bgDescA);
     }
 
-    WGPUBindGroupEntry computeEntriesB[2] = {};
-    computeEntriesB[0].binding = 0;
-    computeEntriesB[0].buffer = vertexBufferB;
-    computeEntriesB[0].offset = 0;
-    computeEntriesB[0].size = sizeof(Point) * NUM_POINTS;
-    computeEntriesB[1].binding = 1;
-    computeEntriesB[1].buffer = vertexBufferA;
-    computeEntriesB[1].offset = 0;
-    computeEntriesB[1].size = sizeof(Point) * NUM_POINTS;
+    // Create second bind group with swapped buffers
+    {
+        WGPUBindGroupEntry entriesB[3] = {};
+        // Input buffer B
+        entriesB[0].binding = 0;
+        entriesB[0].buffer = vertexBufferB;
+        entriesB[0].offset = 0;
+        entriesB[0].size = sizeof(Point) * NUM_POINTS;
+        // Output buffer A
+        entriesB[1].binding = 1;
+        entriesB[1].buffer = vertexBufferA;
+        entriesB[1].offset = 0;
+        entriesB[1].size = sizeof(Point) * NUM_POINTS;
+        // Ellipse buffer
+        entriesB[2].binding = 2;
+        entriesB[2].buffer = ellipseBuffer;
+        entriesB[2].offset = 0;
+        entriesB[2].size = sizeof(EllipseParams) * MAX_ELLIPSES;
 
-    WGPUBindGroupDescriptor computeBgDescB = {};
-    computeBgDescB.layout = computeBindGroupLayout;
-    computeBgDescB.entryCount = 2;
-    computeBgDescB.entries = computeEntriesB;
-
-    computeBindGroupB = wgpuDeviceCreateBindGroup(device, &computeBgDescB);
-    if (!computeBindGroupLayout) {
-        printf("Error: computeBindGroupLayoutB is null!\n");
-        return;
+        WGPUBindGroupDescriptor bgDescB = {};
+        bgDescB.layout = computeBindGroupLayout;
+        bgDescB.entryCount = 3;
+        bgDescB.entries = entriesB;
+        computeBindGroupB = wgpuDeviceCreateBindGroup(device, &bgDescB);
     }
 }
 

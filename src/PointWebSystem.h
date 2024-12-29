@@ -17,8 +17,9 @@ struct UniformData {
 
 class PointWebSystem {
 public:
-    static constexpr int NUM_POINTS = 10;
+    static constexpr int NUM_POINTS = 100000;
     static constexpr int WORKGROUP_SIZE = 256;
+    static constexpr int MAX_ELLIPSES = 30;
 
     PointWebSystem(WGPUDevice device);
     ~PointWebSystem();
@@ -28,12 +29,22 @@ public:
 
 private:
     static constexpr float POINT_SPACING = 1.0f;
+    WGPUBuffer ellipseBuffer = nullptr;
+    
+    // Add structure for ellipse parameters
+    struct EllipseParams {
+        float majorAxis;
+        float minorAxis;
+        float tiltAngle;
+    };
+    std::vector<EllipseParams> ellipseParams;
     
     void createPipelineAndResources();
     void createComputePipeline();
     void createBuffers();
     void createBindGroups();
     void initPoints();
+    float hash(uint32_t n);
     void updateUniforms(const Camera& camera);
 
     WGPUDevice device;
